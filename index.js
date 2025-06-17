@@ -63,16 +63,18 @@ app.get('/download', async (req, res) => {
       return res.json({ type: 'unknown' });
     }
 
-    if (url.includes('tiktok.com')) {
-      const { data } = await axios.get(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      const $ = cheerio.load(data);
-      const videoUrl = $('meta[property="og:video"]').attr('content');
+    // TikTok no-watermark download
+if (url.includes('tiktok.com')) {
+  const apiURL = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
+  const response = await axios.get(apiURL);
+  const videoData = response.data;
 
-      if (videoUrl) return res.json({ type: 'video', link: videoUrl });
-      return res.json({ type: 'unknown' });
-    }
+  if (videoData && videoData.data && videoData.data.play) {
+    return res.json({ type: 'video', link: videoData.data.play });
+  }
+
+  return res.json({ type: 'unknown', error: 'TikTok video not found or private' });
+}
 
     const { data } = await axios.get(url);
     const $ = cheerio.load(data);
