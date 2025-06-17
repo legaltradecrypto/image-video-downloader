@@ -1,14 +1,38 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Media Downloader</title>
 </head>
 <body>
-  <h2>Download Public Media</h2>
-  <input type="text" id="url" placeholder="Enter media URL" style="width: 300px;">
-  <button onclick="download()">Fetch</button>
-  <div id="preview" style="margin-top: 20px;"></div>
-  <script src="script.js"></script>
+  <h2>Public Media Downloader</h2>
+  <input type="text" id="urlInput" placeholder="Paste media URL here" style="width: 90%;" />
+  <button onclick="fetchMedia()">Get Download Link</button>
+
+  <div id="result" style="margin-top: 20px;"></div>
+
+  <script>
+    async function fetchMedia() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return alert("Enter a media URL");
+
+      const res = await fetch('/download?url=' + encodeURIComponent(url));
+      const data = await res.json();
+
+      const result = document.getElementById('result');
+      if (data.link) {
+        result.innerHTML = `
+          <p>Detected: ${data.type.toUpperCase()}</p>
+          <a href="${data.link}" download target="_blank">
+            <button>Click to Download</button>
+          </a>
+          <p>If it opens in browser, tap and hold to save (on mobile)</p>
+        `;
+      } else {
+        result.innerHTML = `<p style="color:red;">${data.error || 'Could not detect downloadable content.'}</p>`;
+      }
+    }
+  </script>
 </body>
 </html>
