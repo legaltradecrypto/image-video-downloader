@@ -23,7 +23,7 @@ app.get('/download', async (req, res) => {
   try {
     if (!url) return res.status(400).json({ error: 'URL is required' });
 
-    // YouTube: MP3 and video support
+    // ✅ YouTube MP3 or video
     if (ytdl.validateURL(url)) {
       if (format === 'mp3') {
         const info = await ytdl.getInfo(url);
@@ -52,68 +52,57 @@ app.get('/download', async (req, res) => {
       return res.json({ type: 'video', link: best.url });
     }
 
-    // Instagram: Try both video and image
+    // ✅ Instagram Reels & Stories
     if (url.includes('instagram.com')) {
-      const { data } = await axios.get(url, {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      const $ = cheerio.load(data);
-      const img = $('meta[property="og:image"]').attr('content');
-      const vid = $('meta[property="og:video"]').attr('content');
+      const api = `https://instadownloader-api-dusky.vercel.app/api?url=${encodeURIComponent(url)}`;
+      const response = await axios.get(api);
+      const result = response.data;
 
-      if (vid) return res.json({ type: 'video', link: vid });
-      if (img) {
-        const imgRes = await axios.get(img, { responseType: 'arraybuffer' });
-        const fileExt = img.split('.').pop().split('?')[0];
-        const fileName = `instagram-image.${fileExt}`;
-        res.setHeader('Content-Type', `image/${fileExt}`);
-        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-        return res.send(imgRes.data);
+      if (result.success && result.url) {
+        return res.json({ type: result.type, link: result.url });
       }
 
-      return res.json({ type: 'unknown' });
+      return res.status(400).json({ error: 'Instagram content not found or private' });
     }
 
-    // TikTok no-watermark
+    // ✅ TikTok No Watermark
     if (url.includes('tiktok.com')) {
-      const apiURL = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
-      const response = await axios.get(apiURL);
+      const api = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
+      const response = await axios.get(api);
       const videoData = response.data;
 
-      if (videoData && videoData.data && videoData.data.play) {
+      if (videoData?.data?.play) {
         return res.json({ type: 'video', link: videoData.data.play });
       }
 
-      return res.json({ type: 'unknown', error: 'TikTok video not found or private' });
+      return res.status(400).json({ error: 'TikTok video not found or private' });
     }
 
-    // Direct image URL (e.g. .jpg, .png)
+    // ✅ Direct image (jpg, png, gif)
     if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
       const response = await axios.get(url, { responseType: 'arraybuffer' });
-      const fileExt = url.split('.').pop().split('?')[0];
-      const fileName = `image.${fileExt}`;
-      res.setHeader('Content-Type', `image/${fileExt}`);
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      const ext = url.split('.').pop().split('?')[0];
+      res.setHeader('Content-Type', `image/${ext}`);
+      res.setHeader('Content-Disposition', `attachment; filename="image.${ext}"`);
       return res.send(response.data);
     }
 
-    // General page: Try scraping og:image
+    // ✅ General OG Image
     const { data: html } = await axios.get(url);
     const $ = cheerio.load(html);
     const img = $('meta[property="og:image"]').attr('content');
     if (img) {
       const imgRes = await axios.get(img, { responseType: 'arraybuffer' });
       const fileExt = img.split('.').pop().split('?')[0];
-      const fileName = `image.${fileExt}`;
       res.setHeader('Content-Type', `image/${fileExt}`);
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Disposition', `attachment; filename="image.${fileExt}"`);
       return res.send(imgRes.data);
     }
 
-    return res.json({ type: 'unknown', error: 'No downloadable content found' });
+    return res.status(400).json({ error: 'No downloadable content found' });
 
   } catch (err) {
-    console.error('Error:', err);
+    console.error('Error:', err.message);
     res.status(500).json({ error: 'Failed to fetch content' });
   }
 });
