@@ -11,7 +11,7 @@ const path = require('path');
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.static('public'));
@@ -21,6 +21,9 @@ app.get('/download', async (req, res) => {
   const format = req.query.format;
 
   try {
+    if (!url) return res.status(400).json({ error: 'URL is required' });
+
+    // YouTube: MP3 and video support
     if (ytdl.validateURL(url)) {
       if (format === 'mp3') {
         const info = await ytdl.getInfo(url);
@@ -49,6 +52,7 @@ app.get('/download', async (req, res) => {
       return res.json({ type: 'video', link: best.url });
     }
 
+    // Instagram: Try both video and image
     if (url.includes('instagram.com')) {
       const { data } = await axios.get(url, {
         headers: { 'User-Agent': 'Mozilla/5.0' }
@@ -58,30 +62,55 @@ app.get('/download', async (req, res) => {
       const vid = $('meta[property="og:video"]').attr('content');
 
       if (vid) return res.json({ type: 'video', link: vid });
-      if (img) return res.json({ type: 'image', link: img });
+      if (img) {
+        const imgRes = await axios.get(img, { responseType: 'arraybuffer' });
+        const fileExt = img.split('.').pop().split('?')[0];
+        const fileName = `instagram-image.${fileExt}`;
+        res.setHeader('Content-Type', `image/${fileExt}`);
+        res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+        return res.send(imgRes.data);
+      }
 
       return res.json({ type: 'unknown' });
     }
 
-    // TikTok no-watermark download
-if (url.includes('tiktok.com')) {
-  const apiURL = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
-  const response = await axios.get(apiURL);
-  const videoData = response.data;
+    // TikTok no-watermark
+    if (url.includes('tiktok.com')) {
+      const apiURL = `https://tikwm.com/api/?url=${encodeURIComponent(url)}`;
+      const response = await axios.get(apiURL);
+      const videoData = response.data;
 
-  if (videoData && videoData.data && videoData.data.play) {
-    return res.json({ type: 'video', link: videoData.data.play });
-  }
+      if (videoData && videoData.data && videoData.data.play) {
+        return res.json({ type: 'video', link: videoData.data.play });
+      }
 
-  return res.json({ type: 'unknown', error: 'TikTok video not found or private' });
-}
+      return res.json({ type: 'unknown', error: 'TikTok video not found or private' });
+    }
 
-    const { data } = await axios.get(url);
-    const $ = cheerio.load(data);
+    // Direct image URL (e.g. .jpg, .png)
+    if (url.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+      const response = await axios.get(url, { responseType: 'arraybuffer' });
+      const fileExt = url.split('.').pop().split('?')[0];
+      const fileName = `image.${fileExt}`;
+      res.setHeader('Content-Type', `image/${fileExt}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      return res.send(response.data);
+    }
+
+    // General page: Try scraping og:image
+    const { data: html } = await axios.get(url);
+    const $ = cheerio.load(html);
     const img = $('meta[property="og:image"]').attr('content');
-    if (img) return res.json({ type: 'image', link: img });
+    if (img) {
+      const imgRes = await axios.get(img, { responseType: 'arraybuffer' });
+      const fileExt = img.split('.').pop().split('?')[0];
+      const fileName = `image.${fileExt}`;
+      res.setHeader('Content-Type', `image/${fileExt}`);
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      return res.send(imgRes.data);
+    }
 
-    return res.json({ type: 'unknown' });
+    return res.json({ type: 'unknown', error: 'No downloadable content found' });
 
   } catch (err) {
     console.error('Error:', err);
