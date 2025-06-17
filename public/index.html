@@ -4,62 +4,42 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Media Downloader</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      padding: 2rem;
-    }
-    input, button {
-      padding: 10px;
-      font-size: 1rem;
-    }
-    #result {
-      margin-top: 20px;
-    }
-    video, img {
-      max-width: 100%;
-      height: auto;
-    }
-  </style>
 </head>
 <body>
-  <h2>Public Media Downloader</h2>
-  <input type="text" id="urlInput" placeholder="Paste media URL here" style="width: 90%;" />
-  <button onclick="fetchMedia()">Get Download Link</button>
+  <h2>Media Downloader</h2>
+  <input type="text" id="urlInput" placeholder="Paste URL here" style="width: 90%;" />
+  <button onclick="fetchMedia()">Download</button>
 
-  <div id="result"></div>
+  <div id="result" style="margin-top: 20px;"></div>
 
   <script>
     async function fetchMedia() {
       const url = document.getElementById('urlInput').value.trim();
       if (!url) return alert("Enter a media URL");
 
+      const res = await fetch('/download?url=' + encodeURIComponent(url));
+      const data = await res.json();
+
       const result = document.getElementById('result');
-      result.innerHTML = "Loading...";
+      result.innerHTML = '';
 
-      try {
-        // If hosted frontend and backend separately, replace `/download` with full backend URL
-        const response = await fetch(`/download?url=${encodeURIComponent(url)}`);
-        const data = await response.json();
-
-        if (data.link) {
+      if (data.link) {
+        if (data.type === 'video') {
           result.innerHTML = `
-            <p>Detected: ${data.type.toUpperCase()}</p>
-            ${data.type === 'image' ? `<img src="${data.link}" width="300" />` : ''}
-            ${data.type === 'video' ? `<video controls width="300" src="${data.link}"></video>` : ''}
-            <br />
-            <a href="${data.link}" download target="_blank">
-              <button>Click to Download</button>
-            </a>
-            <p>If it opens in browser, tap and hold to save (on mobile)</p>
+            <video controls width="300" src="${data.link}"></video><br>
+            <a href="${data.link}" download>Download Video</a><br>
+            <a href="/download?url=${encodeURIComponent(url)}&format=mp3">Download as MP3</a>
+          `;
+        } else if (data.type === 'image') {
+          result.innerHTML = `
+            <img src="${data.link}" width="300"><br>
+            <a href="${data.link}" download>Download Image</a>
           `;
         } else {
-          result.innerHTML = `<p style="color:red;">${data.error || 'Could not detect downloadable content.'}</p>`;
+          result.innerHTML = '<p>Media found but type unknown.</p>';
         }
-      } catch (err) {
-        console.error(err);
-        result.innerHTML = `<p style="color:red;">Error fetching media.</p>`;
+      } else {
+        result.innerHTML = `<p style="color:red;">${data.error || 'Could not detect downloadable content.'}</p>`;
       }
     }
   </script>
